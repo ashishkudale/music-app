@@ -135,7 +135,11 @@ fun PlaylistItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(
+                onClick = onClick,
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -296,9 +300,11 @@ fun AddToPlaylistDialog(
                                     contentDescription = null
                                 )
                             },
-                            modifier = Modifier.clickable {
-                                onPlaylistSelected(playlist)
-                            }
+                            modifier = Modifier.clickable(
+                                onClick = { onPlaylistSelected(playlist) },
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            )
                         )
                     }
                 }

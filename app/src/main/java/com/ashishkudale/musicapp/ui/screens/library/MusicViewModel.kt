@@ -32,12 +32,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
             try {
                 musicRepository.loadSongs()
+                // Get the current value from the flow instead of collecting indefinitely
                 musicRepository.songs.collect { songList ->
                     _songs.value = songList
+                    _isLoading.value = false
+                    // Stop collecting after first emission
+                    return@collect
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
                 _isLoading.value = false
             }
         }
@@ -49,6 +52,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 musicRepository.songs.collect { songList ->
                     _songs.value = songList
+                    return@collect
                 }
             }
         } else {

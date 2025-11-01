@@ -9,4 +9,7 @@ sealed class Screen(val route: String) {
     object PlaylistDetail : Screen("playlist/{playlistId}") {
         fun createRoute(playlistId: Long) = "playlist/$playlistId"
     }
+    object TimestampEditor : Screen("timestamp/{playlistId}/{songId}") {
+        fun createRoute(playlistId: Long, songId: Long) = "timestamp/$playlistId/$songId"
+    }
 }

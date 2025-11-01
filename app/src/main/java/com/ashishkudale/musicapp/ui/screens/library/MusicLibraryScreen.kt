@@ -99,7 +99,11 @@ fun SongItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(
+                onClick = onClick,
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

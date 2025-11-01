@@ -62,7 +62,9 @@ class PlaylistRepository(
             endTimestamp = endTimestamp,
             addedAt = System.currentTimeMillis()
         )
+        android.util.Log.d("PlaylistRepository", "Inserting PlaylistSong: playlistId=$playlistId, songId=$songId, position=$position")
         playlistSongDao.insertSong(playlistSong)
+        android.util.Log.d("PlaylistRepository", "PlaylistSong inserted successfully")
     }
 
     suspend fun updatePlaylistSong(playlistSong: PlaylistSong) {

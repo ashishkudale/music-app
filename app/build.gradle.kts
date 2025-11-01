@@ -83,9 +83,6 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Reorderable for drag and drop
-    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
-
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

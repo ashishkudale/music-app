@@ -2,6 +2,7 @@ package com.ashishkudale.musicapp.ui.screens.player
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import com.ashishkudale.musicapp.data.database.entities.PlaylistSong
 import com.ashishkudale.musicapp.data.model.Song
 import com.ashishkudale.musicapp.service.MusicPlayerService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,11 +29,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         musicPlayerService = service
     }
 
-    fun playSong(song: Song) {
+    fun playSong(song: Song, playlistSong: PlaylistSong? = null) {
         _currentSong.value = song
-        musicPlayerService?.playSong(song)
+        musicPlayerService?.playSong(song, playlistSong)
         _isPlaying.value = true
         updatePlaybackInfo()
+    }
+
+    fun previewTimestamp(song: Song, startTimestamp: Long, endTimestamp: Long) {
+        val playlistSong = PlaylistSong(
+            id = 0,
+            playlistId = 0,
+            songId = song.id,
+            position = 0,
+            startTimestamp = startTimestamp,
+            endTimestamp = endTimestamp,
+            addedAt = System.currentTimeMillis()
+        )
+        playSong(song, playlistSong)
     }
 
     fun pausePlayback() {

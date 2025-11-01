@@ -35,6 +35,7 @@ import com.ashishkudale.musicapp.ui.screens.player.PlayerViewModel
 import com.ashishkudale.musicapp.ui.screens.playlist.PlaylistDetailScreen
 import com.ashishkudale.musicapp.ui.screens.playlist.PlaylistScreen
 import com.ashishkudale.musicapp.ui.screens.playlist.PlaylistViewModel
+import com.ashishkudale.musicapp.ui.screens.timestamp.TimestampEditorScreen
 import com.ashishkudale.musicapp.ui.theme.MusicAppTheme
 import com.ashishkudale.musicapp.util.PermissionUtils
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -65,7 +66,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Bind to music player service
+        // Only bind to music player service (don't start foreground until playing)
         Intent(this, MusicPlayerService::class.java).also { intent ->
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
@@ -118,6 +119,24 @@ fun MusicPlayerApp(
     }
 
     if (permissionsState.allPermissionsGranted) {
+        // Add to Playlist Dialog - shown at app level
+        val showAddToPlaylistDialog by playlistViewModel.showAddToPlaylistDialog.collectAsState()
+        val selectedSong by playlistViewModel.selectedSongForPlaylist.collectAsState()
+        val playlists by playlistViewModel.playlists.collectAsState()
+
+        if (showAddToPlaylistDialog && selectedSong != null) {
+            com.ashishkudale.musicapp.ui.screens.playlist.AddToPlaylistDialog(
+                playlists = playlists,
+                onDismiss = { playlistViewModel.hideAddToPlaylistDialog() },
+                onPlaylistSelected = { playlist ->
+                    selectedSong?.let { song ->
+                        playlistViewModel.addSongToPlaylist(playlist.id, song)
+                    }
+                    playlistViewModel.hideAddToPlaylistDialog()
+                }
+            )
+        }
+
         Scaffold(
             bottomBar = {
                 NavigationBar {
@@ -192,8 +211,40 @@ fun MusicPlayerApp(
                                 playerViewModel.playSong(song)
                                 navController.navigate(Screen.Player.createRoute(songId))
                             }
+                        },
+                        onEditTimestamp = { playlistSongId, songId ->
+                            navController.navigate(Screen.TimestampEditor.createRoute(playlistSongId, songId))
                         }
                     )
+                }
+
+                composable(
+                    route = Screen.TimestampEditor.route,
+                    arguments = listOf(
+                        navArgument("playlistId") { type = NavType.LongType },
+                        navArgument("songId") { type = NavType.LongType }
+                    )
+                ) { backStackEntry ->
+                    val playlistSongId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
+                    val songId = backStackEntry.arguments?.getLong("songId") ?: 0L
+
+                    val song = musicViewModel.getSongById(songId)
+                    val playlistSong = playlistViewModel.getPlaylistSongById(playlistSongId)
+
+                    if (song != null) {
+                        TimestampEditorScreen(
+                            song = song,
+                            initialStartTimestamp = playlistSong?.startTimestamp ?: 0,
+                            initialEndTimestamp = playlistSong?.endTimestamp ?: -1,
+                            onSave = { startTime, endTime ->
+                                playlistViewModel.updateSongTimestamp(playlistSongId, startTime, endTime)
+                            },
+                            onBack = { navController.popBackStack() },
+                            onPreview = { startTime, endTime ->
+                                playerViewModel.previewTimestamp(song, startTime, endTime)
+                            }
+                        )
+                    }
                 }
 
                 composable(

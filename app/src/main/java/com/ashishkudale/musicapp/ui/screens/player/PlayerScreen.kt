@@ -175,30 +175,39 @@ fun PlayerContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { /* Previous song */ }) {
+            // Previous Button
+            FilledTonalIconButton(
+                onClick = { /* Previous song */ },
+                modifier = Modifier.size(80.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.SkipPrevious,
                     contentDescription = "Previous",
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(56.dp)
                 )
             }
 
+            // Play/Pause Button
             FilledIconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(72.dp)
+                modifier = Modifier.size(96.dp)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(72.dp)
                 )
             }
 
-            IconButton(onClick = { /* Next song */ }) {
+            // Next Button
+            FilledTonalIconButton(
+                onClick = { /* Next song */ },
+                modifier = Modifier.size(80.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.SkipNext,
                     contentDescription = "Next",
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(56.dp)
                 )
             }
         }

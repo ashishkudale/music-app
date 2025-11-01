@@ -13,6 +13,7 @@ import com.ashishkudale.musicapp.data.repository.PlaylistRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
@@ -58,10 +59,12 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             try {
                 playlistRepository.getAllPlaylists().collect { playlistList ->
                     _playlists.value = playlistList
+                    _isLoading.value = false
+                    // Stop collecting after first emission
+                    return@collect
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
                 _isLoading.value = false
             }
         }
@@ -71,22 +74,35 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                android.util.Log.d("PlaylistViewModel", "Loading playlist $playlistId")
                 playlistRepository.getPlaylistWithSongs(playlistId).collect { playlistWithSongsData ->
                     _playlistWithSongs.value = playlistWithSongsData
                     _currentPlaylist.value = playlistWithSongsData?.playlist
 
+                    android.util.Log.d("PlaylistViewModel", "Playlist data: ${playlistWithSongsData?.playlist?.name}, songs in DB: ${playlistWithSongsData?.songs?.size ?: 0}")
+
                     // Load song details
                     playlistWithSongsData?.songs?.let { playlistSongs ->
+                        android.util.Log.d("PlaylistViewModel", "Loading details for ${playlistSongs.size} songs")
                         val songsWithDetails = playlistSongs.map { playlistSong ->
                             val song = musicRepository.getSongById(playlistSong.songId)
+                            android.util.Log.d("PlaylistViewModel", "PlaylistSong ID: ${playlistSong.id}, SongID: ${playlistSong.songId}, Found: ${song != null}, Title: ${song?.title}")
                             Pair(playlistSong, song)
                         }
                         _playlistSongsWithDetails.value = songsWithDetails
+                        android.util.Log.d("PlaylistViewModel", "Set ${songsWithDetails.size} songs with details")
+                    } ?: run {
+                        _playlistSongsWithDetails.value = emptyList()
+                        android.util.Log.d("PlaylistViewModel", "No songs in playlist")
                     }
+
+                    _isLoading.value = false
+                    // Stop collecting after first emission
+                    return@collect
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
+                android.util.Log.e("PlaylistViewModel", "Error loading playlist: ${e.message}", e)
                 _isLoading.value = false
             }
         }
@@ -97,8 +113,11 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             try {
                 playlistRepository.createPlaylist(name, description)
                 hideCreateDialog()
+                // Reload playlists to show the new one
+                loadPlaylists()
             } catch (e: Exception) {
                 e.printStackTrace()
+                android.util.Log.e("PlaylistViewModel", "Error creating playlist", e)
             }
         }
     }
@@ -117,34 +136,63 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 playlistRepository.deletePlaylist(playlist)
+                // Reload playlists to update the list
+                loadPlaylists()
             } catch (e: Exception) {
                 e.printStackTrace()
+                android.util.Log.e("PlaylistViewModel", "Error deleting playlist", e)
             }
         }
     }
 
     fun addSongToPlaylist(playlistId: Long, song: Song) {
-        viewModelScope.launch {
-            try {
-                val currentSongs = playlistRepository.getSongsInPlaylist(playlistId)
-                var maxPosition = -1
-                currentSongs.collect { songs ->
-                    maxPosition = songs.maxOfOrNull { it.position } ?: -1
-                    return@collect
-                }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            android.util.Log.d("PlaylistViewModel", "Adding song ${song.title} (ID: ${song.id}) to playlist $playlistId")
 
+            try {
+                // Get current max position
+                android.util.Log.d("PlaylistViewModel", "Step 1: Getting max position")
+                val currentSongs = playlistRepository.getSongsInPlaylist(playlistId).first()
+                val maxPosition = currentSongs.maxOfOrNull { it.position } ?: -1
+                android.util.Log.d("PlaylistViewModel", "Current max position: $maxPosition, existing songs: ${currentSongs.size}")
+
+                android.util.Log.d("PlaylistViewModel", "Step 2: About to insert song at position ${maxPosition + 1}")
+
+                // Add song to playlist
                 playlistRepository.addSongToPlaylist(
                     playlistId = playlistId,
                     songId = song.id,
                     position = maxPosition + 1
                 )
+                android.util.Log.d("PlaylistViewModel", "Step 3: Song added to database successfully")
 
+                // Wait a bit for database to complete
+                android.util.Log.d("PlaylistViewModel", "Step 4: Waiting for DB to complete")
+                kotlinx.coroutines.delay(200)
+
+                android.util.Log.d("PlaylistViewModel", "Step 5: Updating playlist song count")
                 // Update song count
-                _playlists.value.find { it.id == playlistId }?.let { playlist ->
-                    updatePlaylist(playlist.copy(songCount = playlist.songCount + 1))
+                val playlist = playlistRepository.getPlaylist(playlistId).first()
+                playlist?.let {
+                    playlistRepository.updatePlaylist(it.copy(songCount = it.songCount + 1))
+                    android.util.Log.d("PlaylistViewModel", "Updated playlist song count to ${it.songCount + 1}")
                 }
+
+                android.util.Log.d("PlaylistViewModel", "Step 6: Reloading playlists")
+                // Reload playlists and current playlist
+                loadPlaylists()
+
+                android.util.Log.d("PlaylistViewModel", "Step 7: Checking if need to reload current playlist")
+                if (_currentPlaylist.value?.id == playlistId) {
+                    android.util.Log.d("PlaylistViewModel", "Step 7a: Reloading current playlist $playlistId")
+                    loadPlaylist(playlistId)
+                }
+
+                android.util.Log.d("PlaylistViewModel", "Step 8: COMPLETE - All steps finished successfully")
             } catch (e: Exception) {
                 e.printStackTrace()
+                android.util.Log.e("PlaylistViewModel", "FATAL ERROR in addSongToPlaylist: ${e.message}", e)
+                android.util.Log.e("PlaylistViewModel", "Stack trace: ${e.stackTraceToString()}")
             }
         }
     }
@@ -178,6 +226,32 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 e.printStackTrace()
             }
         }
+    }
+
+    fun updateSongTimestamp(playlistSongId: Long, startTimestamp: Long, endTimestamp: Long) {
+        viewModelScope.launch {
+            try {
+                // Find the playlist song and update it
+                _playlistSongsWithDetails.value.find { it.first.id == playlistSongId }?.let { (playlistSong, _) ->
+                    val updatedSong = playlistSong.copy(
+                        startTimestamp = startTimestamp,
+                        endTimestamp = endTimestamp
+                    )
+                    playlistRepository.updatePlaylistSong(updatedSong)
+
+                    // Reload the current playlist to reflect changes
+                    _currentPlaylist.value?.let { playlist ->
+                        loadPlaylist(playlist.id)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun getPlaylistSongById(playlistSongId: Long): PlaylistSong? {
+        return _playlistSongsWithDetails.value.find { it.first.id == playlistSongId }?.first
     }
 
     fun showCreateDialog() {

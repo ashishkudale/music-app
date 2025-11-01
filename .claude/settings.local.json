@@ -4,7 +4,9 @@
       "Bash(dir:*)",
       "Bash(.gradlew build:*)",
       "Bash(gradlew.bat build:*)",
-      "Bash(./gradlew assembleDebug:*)"
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(gradlew.bat assembleDebug:*)",
+      "Bash(./gradlew.bat:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,9 +2,13 @@ package com.ashishkudale.musicapp.ui.screens.playlist
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,7 +19,6 @@ import coil.compose.AsyncImage
 import com.ashishkudale.musicapp.data.database.entities.PlaylistSong
 import com.ashishkudale.musicapp.data.model.Song
 import com.ashishkudale.musicapp.util.TimeFormatter
-import org.burnoutcrew.reorderable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,7 +26,8 @@ fun PlaylistDetailScreen(
     playlistId: Long,
     viewModel: PlaylistViewModel,
     onNavigateBack: () -> Unit,
-    onSongClick: (Long) -> Unit
+    onSongClick: (Long) -> Unit,
+    onEditTimestamp: (Long, Long) -> Unit = { _, _ -> }
 ) {
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
@@ -32,25 +36,6 @@ fun PlaylistDetailScreen(
     val playlist by viewModel.currentPlaylist.collectAsState()
     val playlistSongsWithDetails by viewModel.playlistSongsWithDetails.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-
-    var songs by remember { mutableStateOf(playlistSongsWithDetails) }
-
-    LaunchedEffect(playlistSongsWithDetails) {
-        songs = playlistSongsWithDetails
-    }
-
-    val reorderableState = rememberReorderableLazyListState(
-        onMove = { from, to ->
-            songs = songs.toMutableList().apply {
-                add(to.index, removeAt(from.index))
-            }
-        },
-        onDragEnd = { _, _ ->
-            // Update positions in database
-            val playlistSongs = songs.map { it.first }
-            viewModel.reorderSongs(playlistSongs)
-        }
-    )
 
     Scaffold(
         topBar = {
@@ -90,7 +75,7 @@ fun PlaylistDetailScreen(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
-                songs.isEmpty() -> {
+                playlistSongsWithDetails.isEmpty() -> {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -117,34 +102,27 @@ fun PlaylistDetailScreen(
                 }
                 else -> {
                     LazyColumn(
-                        state = reorderableState.listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .reorderable(reorderableState)
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        itemsIndexed(songs, key = { _, item -> item.first.id }) { index, (playlistSong, song) ->
-                            ReorderableItem(reorderableState, key = playlistSong.id) { isDragging ->
-                                val elevation = if (isDragging) 8.dp else 0.dp
+                        items(playlistSongsWithDetails, key = { it.first.id }) { (playlistSong, song) ->
+                            val position = playlistSongsWithDetails.indexOf(Pair(playlistSong, song)) + 1
 
-                                Surface(
-                                    tonalElevation = elevation,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    PlaylistSongItem(
-                                        playlistSong = playlistSong,
-                                        song = song,
-                                        position = index + 1,
-                                        onSongClick = { song?.let { onSongClick(it.id) } },
-                                        onRemove = {
-                                            playlist?.let {
-                                                viewModel.removeSongFromPlaylist(it.id, playlistSong.songId)
-                                            }
-                                        },
-                                        onReorderHandle = reorderableState
-                                    )
+                            PlaylistSongItem(
+                                playlistSong = playlistSong,
+                                song = song,
+                                position = position,
+                                onSongClick = { song?.let { onSongClick(it.id) } },
+                                onRemove = {
+                                    playlist?.let {
+                                        viewModel.removeSongFromPlaylist(it.id, playlistSong.songId)
+                                    }
+                                },
+                                onEditTimestamp = {
+                                    song?.let { onEditTimestamp(playlistSong.id, it.id) }
                                 }
-                            }
-                            if (index < songs.size - 1) {
+                            )
+
+                            if (position < playlistSongsWithDetails.size) {
                                 Divider()
                             }
                         }
@@ -162,7 +140,7 @@ fun PlaylistSongItem(
     position: Int,
     onSongClick: () -> Unit,
     onRemove: () -> Unit,
-    onReorderHandle: ReorderableLazyListState
+    onEditTimestamp: () -> Unit
 ) {
     var showRemoveDialog by remember { mutableStateOf(false) }
 
@@ -172,27 +150,15 @@ fun PlaylistSongItem(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Drag Handle
-        IconButton(
-            onClick = {},
-            modifier = Modifier.detectReorderAfterLongPress(onReorderHandle)
-        ) {
-            Icon(
-                imageVector = Icons.Default.DragHandle,
-                contentDescription = "Reorder",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
         // Position Number
         Text(
             text = "$position",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(32.dp)
+            modifier = Modifier.width(40.dp)
         )
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         // Album Art or Music Icon
         if (song?.albumArtUri != null) {
@@ -252,7 +218,16 @@ fun PlaylistSongItem(
                 text = TimeFormatter.formatTime(it.duration),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+
+        // Edit Timestamp Button
+        IconButton(onClick = onEditTimestamp) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Edit timestamp",
+                tint = MaterialTheme.colorScheme.primary
             )
         }
 
